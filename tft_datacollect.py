@@ -2,18 +2,14 @@ import json
 import requests
 import pdb
 import pandas as pd
-
+import time
 
 url_gm='https://euw1.api.riotgames.com/tft/league/v1/grandmaster'
-url_m='https://euw1.api.riotgames.com/tft/league/v1/master'
+
 
 header={
-    "User-Agent": "",
-    "Accept-Language": "",
-    "Accept-Charset": "",
-    "Origin": "https://developer.riotgames.com",
-    "X-Riot-Token": ""
-    }
+    
+}
 
 def connect(url, header): 
     req=requests.get(url=url, headers=header)
@@ -21,46 +17,72 @@ def connect(url, header):
     return req
 
 def crawl_json(req):
-    id_player=[]
+    player=[]
     win_player=[]
     losses_player=[]
     rank=[]
 
     for m in range(len(req['entries'])):
-        v=req['entries'][m]['summonerId']
-        id_player.append(v)
+        v=req['entries'][m]['summonerName']
+        player.append(v)
 
         w=req['entries'][m]['wins']
-        win_player.append(m)
+        win_player.append(w)
 
         d=req['entries'][m]['losses']
         losses_player.append(d)
 
-    return id_player, win_player, losses_player
+    return player, win_player, losses_player
 
-def db_player(db_master, db_gm): 
-    data_master={'id_player':db_master[0], 'total_ranked_win_season': db_master[1], 'total_ranked_losses_season': db_master[2]}
-    df_master=pd.DataFrame(data_master)
-
-    data_gm={'id_player':db_gm[0], 'total_ranked_win_season': db_gm[1], 'total_ranked_losses_season': db_gm[2]}
-    df_gm=pd.DataFrame(data_gm)
-
-    df_db=df_gm.append(df_master, ignore_index=True)
-
+def db_player(db): 
+    data={'name_player':db[0], 'total_ranked_win_season': db[1], 'total_ranked_losses_season': db[2]}
+    df_db=pd.DataFrame(data)
     return df_db
 
-def launch_process(url_gm, url_m, header): 
-    req_m=connect(url_m,header)
-    db_m=crawl_json(req=req_m)
+def get_puid(df_db, header): 
+    name_player=df_db['name_player']
+    name_player=name_player.to_list()
 
-    req_gm=connect(url_gm, header)
-    db_gm=crawl_json(req=req_gm)
+    puid=[]
+    for m in name_player:
+        url_puid='https://euw1.api.riotgames.com/tft/summoner/v1/summoners/by-name/'+m
+        req=connect(url_puid, header)
+        print(m)
+        try :
+            p=req['puuid']
+            puid.append(p)
+        except KeyError : 
+            pdb.set_trace()
+        time.sleep(2)
+    
+    df_db['puid']=puid
+    return df_db
 
-    df_db_player=db_player(db_master=db_m, db_gm=db_gm)
+def type_db(header):
+    user_value=input("For which rank would you like to get the data? Type C for Challenger / GM for Grand Master : ")
 
-    #optional to save the DB as CSV
-    df_db_player.to_csv('db_players.csv', header=True, index=False)
+    #URLS to request to Riot API
+    url_c='https://euw1.api.riotgames.com/tft/league/v1/challenger'
+    url_gm='https://euw1.api.riotgames.com/tft/league/v1/grandmaster'
+    url_m='https://euw1.api.riotgames.com/tft/league/v1/master'
 
-    return print('Data collected!')
+    if user_value=='C':
+        req=connect(url_c, header)
+        db=crawl_json(req)
+        name='leaderboard_chall.csv'
+        df_db=db_player(db)
+        df_db=get_puid(df_db=df_db, header=header)
+        df_db.to_csv(name, header=True, index=False)
 
-launch_process(url_gm=url_gm, url_m=url_m, header=header)
+    elif user_value=='GM':
+        req=connect(url_gm, header)
+        db=crawl_json(req)
+        name='leaderboard_gm.csv'
+        df_db=db_player(db)
+        df_db=get_puid(df_db=df_db, header=header)
+        df_db.to_csv(name, header=True, index=False)
+
+    return print('Data collected!'), df_db
+
+df_db=type_db(header)
+pdb.set_trace()
