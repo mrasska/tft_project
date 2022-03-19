@@ -1,11 +1,9 @@
 import json
+import re
 import requests
 import pdb
 import pandas as pd
 import time
-
-url_gm='https://euw1.api.riotgames.com/tft/league/v1/grandmaster'
-
 
 header={
     
@@ -39,11 +37,12 @@ def db_player(db):
     df_db=pd.DataFrame(data)
     return df_db
 
-def get_puid(df_db, header): 
+def get_puid_id(df_db, header): 
     name_player=df_db['name_player']
     name_player=name_player.to_list()
 
     puid=[]
+    last_matches=[]
     for m in name_player:
         url_puid='https://euw1.api.riotgames.com/tft/summoner/v1/summoners/by-name/'+m
         req=connect(url_puid, header)
@@ -51,12 +50,19 @@ def get_puid(df_db, header):
         try :
             p=req['puuid']
             puid.append(p)
+            
+            url_id_match='https://europe.api.riotgames.com/tft/match/v1/matches/by-puuid/'+p+'/ids?count=50'
+            req=connect(url_id_match, header)
+            last_matches.append(req)
+            
         except KeyError : 
             pdb.set_trace()
         time.sleep(2)
     
     df_db['puid']=puid
+    df_db['last_matches']=last_matches
     return df_db
+
 
 def type_db(header):
     user_value=input("For which rank would you like to get the data? Type C for Challenger / GM for Grand Master : ")
@@ -64,14 +70,13 @@ def type_db(header):
     #URLS to request to Riot API
     url_c='https://euw1.api.riotgames.com/tft/league/v1/challenger'
     url_gm='https://euw1.api.riotgames.com/tft/league/v1/grandmaster'
-    url_m='https://euw1.api.riotgames.com/tft/league/v1/master'
 
     if user_value=='C':
         req=connect(url_c, header)
         db=crawl_json(req)
         name='leaderboard_chall.csv'
         df_db=db_player(db)
-        df_db=get_puid(df_db=df_db, header=header)
+        df_db=get_puid_id(df_db=df_db, header=header)
         df_db.to_csv(name, header=True, index=False)
 
     elif user_value=='GM':
@@ -79,7 +84,7 @@ def type_db(header):
         db=crawl_json(req)
         name='leaderboard_gm.csv'
         df_db=db_player(db)
-        df_db=get_puid(df_db=df_db, header=header)
+        df_db=get_puid_id(df_db=df_db, header=header)
         df_db.to_csv(name, header=True, index=False)
 
     return print('Data collected!'), df_db
